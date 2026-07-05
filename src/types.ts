@@ -1,4 +1,4 @@
-export type Role = 'Administrator' | 'Forestry Officer' | 'Village Forest Committee' | 'Community Member';
+export type Role = 'National Director' | 'Forestry Officer' | 'Village Forest Committee' | 'Community Member';
 
 export type UserProfile = {
   uid: string;
@@ -19,6 +19,7 @@ export type ForestRecord = {
   gps?: string;
   description?: string;
   status: 'Active' | 'Protected' | 'Under Review';
+  imageUrl?: string;
   createdAt?: unknown;
 };
 
@@ -40,7 +41,8 @@ export type IncidentRecord = {
   village: string;
   type: string;
   description: string;
-  status: 'New' | 'Under Investigation' | 'Resolved';
+  status: 'New' | 'Investigating' | 'Resolved';
+  imageUrl?: string;
   createdAt?: unknown;
 };
 
@@ -91,3 +93,14 @@ export type WorkRegistration = {
   attendance?: 'Present' | 'Absent';
   createdAt?: unknown;
 };
+
+export type AnnouncementRecord = {
+  id?: string;
+  title: string;
+  content: string;
+  imageUrl?: string;
+  author: string;
+  type: 'Activity' | 'Achievement' | 'General';
+  createdAt?: any;
+};
+

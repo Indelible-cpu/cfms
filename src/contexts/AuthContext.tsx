@@ -7,9 +7,9 @@ import {
   sendPasswordResetEmail,
   updatePassword,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { ref, get } from 'firebase/database';
 import { auth, db } from '../firebase';
-import { Role, UserProfile } from '../types';
+import { UserProfile } from '../types';
 
 type AuthContextValue = {
   user: FirebaseUser | null;
@@ -23,12 +23,9 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const normalizeAuthUsername = (username: string) => {
+const toEmail = (username: string): string => {
   const trimmed = username.trim();
   if (!trimmed) return trimmed;
-  if (trimmed.toLowerCase() === 'admin') {
-    return 'admin@local.community';
-  }
   return trimmed.includes('@') ? trimmed : `${trimmed}@local.community`;
 };
 
@@ -42,11 +39,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(nextUser);
       if (nextUser) {
         try {
-          const ref = doc(db, 'users', nextUser.uid);
-          const snapshot = await getDoc(ref);
+          const snapshot = await get(ref(db, `users/${nextUser.uid}`));
           if (snapshot.exists()) {
-            setProfile(snapshot.data() as UserProfile);
+            setProfile(snapshot.val() as UserProfile);
           } else {
+            // New user — default to Community Member until assigned a role
             setProfile({
               uid: nextUser.uid,
               role: 'Community Member',
@@ -54,8 +51,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               email: nextUser.email || undefined,
             });
           }
-        } catch (error) {
-          console.error('Unable to load profile', error);
+        } catch {
           setProfile({
             uid: nextUser.uid,
             role: 'Community Member',
@@ -68,65 +64,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!user && !loading && localStorage.getItem('cfms-fake-admin') === '1') {
-      const fakeUser = {
-        uid: 'admin-local',
-        displayName: 'admin',
-        email: normalizeAuthUsername('admin'),
-      } as FirebaseUser;
-      setUser(fakeUser);
-      setProfile({
-        uid: 'admin-local',
-        role: 'Administrator',
-        name: 'admin',
-        email: normalizeAuthUsername('admin'),
-      });
-    }
-  }, [loading, user]);
-
-  const login = async (username: string, password: string) => {
-    const authIdentifier = normalizeAuthUsername(username);
-
-    try {
-      return await signInWithEmailAndPassword(auth, authIdentifier, password);
-    } catch (error: any) {
-      if (username.trim().toLowerCase() === 'admin' && password === 'admin123!') {
-        localStorage.setItem('cfms-fake-admin', '1');
-        const fakeUser = {
-          uid: 'admin-local',
-          displayName: 'admin',
-          email: authIdentifier,
-        } as FirebaseUser;
-        setUser(fakeUser);
-        setProfile({
-          uid: 'admin-local',
-          role: 'Administrator',
-          name: 'admin',
-          email: authIdentifier,
-        });
-        return fakeUser;
-      }
-      throw error;
-    }
-  };
+  const login = (username: string, password: string) =>
+    signInWithEmailAndPassword(auth, toEmail(username), password);
 
   const logout = async () => {
     await signOut(auth);
-    localStorage.removeItem('cfms-fake-admin');
     setUser(null);
     setProfile(null);
   };
 
-  const resetPassword = (username: string) => sendPasswordResetEmail(auth, normalizeAuthUsername(username));
+  const resetPassword = (username: string) =>
+    sendPasswordResetEmail(auth, toEmail(username));
+
   const changePassword = async (password: string) => {
-    if (!auth.currentUser) {
-      throw new Error('No signed-in user.');
-    }
+    if (!auth.currentUser) throw new Error('No signed-in user.');
     await updatePassword(auth.currentUser, password);
   };
 
@@ -140,8 +94,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };

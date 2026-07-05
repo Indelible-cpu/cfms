@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { collection, addDoc, getDocs, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { ref, push, get, remove, update } from 'firebase/database';
 import { useTranslation } from 'react-i18next';
 import { db } from '../firebase';
 import { PermitRecord } from '../types';
@@ -17,8 +17,13 @@ function Permits() {
 
   const loadPermits = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'permits'));
-      setPermits(snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as PermitRecord) })));
+      const snapshot = await get(ref(db, 'permits'));
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setPermits(Object.entries(data).map(([id, val]) => ({ id, ...(val as any) })));
+      } else {
+        setPermits([]);
+      }
     } catch (error) {
       console.error(error);
     }
@@ -30,18 +35,26 @@ function Permits() {
 
   const onSubmit = async (data: PermitRecord) => {
     setMessage('');
+    
+    // Duplicate check
+    const exists = permits.some(p => p.requestType === data.requestType && p.village === data.village && p.status === 'Pending');
+    if (exists) {
+      setMessage('You already have a pending permit request for this activity in this village.');
+      return;
+    }
+
     try {
-      const permitRef = await addDoc(collection(db, 'permits'), {
+      const permitRef = await push(ref(db, 'permits'), {
         ...data,
         permitNumber: `PER-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
-        createdAt: serverTimestamp(),
+        createdAt: Date.now(),
       });
       setMessage('Permit request submitted.');
       reset({ requestType: 'Firewood Collection', status: 'Pending', village: '', reason: '' });
       loadPermits();
       try {
         const { sendAudit } = await import('../lib/audit');
-        sendAudit({ action: 'permit_requested', resource: data.village, details: { type: data.requestType, permitNumber: permitRef?.id || null } });
+        sendAudit({ action: 'permit_requested', resource: data.village, details: { type: data.requestType, permitNumber: permitRef?.key || null } });
       } catch {}
     } catch (error) {
       setMessage('Unable to submit permit request.');
@@ -52,8 +65,17 @@ function Permits() {
   const updateStatus = async (permit: PermitRecord, status: PermitRecord['status']) => {
     if (!permit.id) return;
     try {
-      const permitDoc = doc(db, 'permits', permit.id);
-      await updateDoc(permitDoc, { status });
+      await update(ref(db, `permits/${permit.id}`), { status });
+      loadPermits();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleDelete = async (id?: string) => {
+    if (!id || !window.confirm('Are you sure you want to delete this permit request?')) return;
+    try {
+      await remove(ref(db, `permits/${id}`));
       loadPermits();
     } catch (error) {
       console.error(error);
@@ -68,7 +90,8 @@ function Permits() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <form className="space-y-4 rounded-3xl border border-earth/10 bg-sand p-5" onSubmit={handleSubmit(onSubmit)}>
+        <form className="space-y-4 rounded-3xl border border-earth/10 bg-sand p-5 h-fit" onSubmit={handleSubmit(onSubmit)}>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-earth/70">New Request</p>
           <label className="block text-sm text-forest">
             {t('requestType')}
             <select {...register('requestType')} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm">
@@ -99,7 +122,12 @@ function Permits() {
             {permits.length ? (
               permits.map((permit) => (
                 <div key={permit.id} className="rounded-3xl bg-sand p-4">
-                  <p className="font-semibold text-forest">{permit.requestType}</p>
+                  <div className="flex items-start justify-between">
+                    <p className="font-semibold text-forest">{permit.requestType}</p>
+                    {profile?.role !== 'Community Member' && (
+                      <button onClick={() => handleDelete(permit.id)} className="text-xs text-red-500 hover:underline">Del</button>
+                    )}
+                  </div>
                   <p className="text-sm text-slate-600">{permit.village} • {permit.permitNumber}</p>
                   <p className="mt-2 text-sm text-slate-700">{permit.reason}</p>
                   <div className="mt-3 flex flex-wrap gap-2">

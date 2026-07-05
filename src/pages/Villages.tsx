@@ -1,20 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { ref, push, get, remove, update } from 'firebase/database';
 import { useTranslation } from 'react-i18next';
 import { db } from '../firebase';
 import { VillageRecord } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 function Villages() {
   const { t } = useTranslation();
-  const { register, handleSubmit, reset } = useForm<VillageRecord>();
+  const { profile } = useAuth();
+  const { register, handleSubmit, reset, setValue } = useForm<VillageRecord>();
   const [message, setMessage] = useState('');
   const [villages, setVillages] = useState<VillageRecord[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const loadVillages = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'villages'));
-      setVillages(snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as VillageRecord) })));
+      const snapshot = await get(ref(db, 'villages'));
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setVillages(Object.entries(data).map(([id, val]) => ({ id, ...(val as any) })));
+      } else {
+        setVillages([]);
+      }
     } catch (error) {
       console.error(error);
     }
@@ -26,16 +34,51 @@ function Villages() {
 
   const onSubmit = async (data: VillageRecord) => {
     setMessage('');
+    
+    // Duplicate check for new villages
+    if (!editingId) {
+      const exists = villages.some(v => v.name.toLowerCase() === data.name.toLowerCase() && v.district.toLowerCase() === data.district.toLowerCase());
+      if (exists) {
+        setMessage('A village with this name already exists in this district.');
+        return;
+      }
+    }
+
     try {
-      await addDoc(collection(db, 'villages'), {
-        ...data,
-        createdAt: serverTimestamp(),
-      });
-      setMessage('Village registered.');
+      if (editingId) {
+        await update(ref(db, `villages/${editingId}`), data);
+        setMessage('Village updated.');
+      } else {
+        await push(ref(db, 'villages'), {
+          ...data,
+          createdAt: Date.now(),
+        });
+        setMessage('Village registered.');
+      }
       reset();
+      setEditingId(null);
       loadVillages();
     } catch (error) {
       setMessage('Unable to save village.');
+      console.error(error);
+    }
+  };
+
+  const handleEdit = (village: VillageRecord) => {
+    setEditingId(village.id || null);
+    setValue('name', village.name);
+    setValue('authority', village.authority);
+    setValue('district', village.district);
+    setValue('population', village.population);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDelete = async (id?: string) => {
+    if (!id || !window.confirm('Are you sure you want to delete this village?')) return;
+    try {
+      await remove(ref(db, `villages/${id}`));
+      loadVillages();
+    } catch (error) {
       console.error(error);
     }
   };
@@ -47,28 +90,42 @@ function Villages() {
         <p className="mt-2 text-sm text-slate-600">Create village profiles and keep track of community forests.</p>
       </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <form className="space-y-4 rounded-3xl border border-earth/10 bg-sand p-5" onSubmit={handleSubmit(onSubmit)}>
-          <label className="block text-sm text-forest">
-            {t('villageName')}
-            <input {...register('name', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
-          </label>
-          <label className="block text-sm text-forest">
-            {t('traditionalAuthority')}
-            <input {...register('authority')} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
-          </label>
-          <label className="block text-sm text-forest">
-            {t('district')}
-            <input {...register('district', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
-          </label>
-          <label className="block text-sm text-forest">
-            {t('population')}
-            <input {...register('population')} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
-          </label>
-          <button type="submit" className="w-full rounded-3xl bg-forest px-5 py-3 text-sm font-semibold text-white transition hover:bg-earth">
-            {t('submit')}
-          </button>
-          {message ? <p className="text-sm text-forest">{message}</p> : null}
-        </form>
+        {profile?.role !== 'Community Member' ? (
+          <form className="space-y-4 rounded-3xl border border-earth/10 bg-sand p-5 h-fit" onSubmit={handleSubmit(onSubmit)}>
+            <div className="flex justify-between items-center">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-earth/70">
+                {editingId ? 'Edit Village' : t('villageName')}
+              </p>
+              {editingId && (
+                <button type="button" onClick={() => { reset(); setEditingId(null); }} className="text-xs text-red-500 hover:underline">Cancel Edit</button>
+              )}
+            </div>
+            <label className="block text-sm text-forest">
+              {t('villageName')}
+              <input {...register('name', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+            </label>
+            <label className="block text-sm text-forest">
+              {t('traditionalAuthority')}
+              <input {...register('authority')} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+            </label>
+            <label className="block text-sm text-forest">
+              {t('district')}
+              <input {...register('district', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+            </label>
+            <label className="block text-sm text-forest">
+              {t('population')}
+              <input {...register('population')} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+            </label>
+            <button type="submit" className="w-full rounded-3xl bg-forest px-5 py-3 text-sm font-semibold text-white transition hover:bg-earth">
+              {editingId ? 'Update Village' : t('submit')}
+            </button>
+            {message ? <p className="text-sm text-forest">{message}</p> : null}
+          </form>
+        ) : (
+          <div className="rounded-3xl border border-earth/10 bg-sand p-5 h-fit">
+            <p className="text-sm text-slate-600">Only officials can register or edit villages.</p>
+          </div>
+        )}
 
         <div className="rounded-3xl border border-earth/10 bg-white p-5 shadow-sm">
           <p className="text-sm uppercase tracking-[0.2em] text-earth/70">{t('villages')}</p>
@@ -76,7 +133,15 @@ function Villages() {
             {villages.length ? (
               villages.map((village) => (
                 <div key={village.id} className="rounded-3xl bg-sand p-4">
-                  <p className="font-semibold text-forest">{village.name}</p>
+                  <div className="flex justify-between items-start">
+                    <p className="font-semibold text-forest">{village.name}</p>
+                    {profile?.role !== 'Community Member' && (
+                      <div className="flex gap-2 text-xs">
+                        <button onClick={() => handleEdit(village)} className="text-forest hover:underline">Edit</button>
+                        <button onClick={() => handleDelete(village.id)} className="text-red-500 hover:underline">Del</button>
+                      </div>
+                    )}
+                  </div>
                   <p className="text-sm text-slate-600">{village.authority || '—'} • {village.district}</p>
                   {village.population ? <p className="text-sm text-slate-600">{t('population')}: {village.population}</p> : null}
                 </div>

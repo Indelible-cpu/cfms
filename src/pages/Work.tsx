@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { collection, addDoc, getDocs, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { ref, push, get, remove, update } from 'firebase/database';
 import { useTranslation } from 'react-i18next';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,10 +11,16 @@ function Work() {
   const { profile } = useAuth();
   const [opportunities, setOpportunities] = useState<WorkOpportunity[]>([]);
   const [registrations, setRegistrations] = useState<WorkRegistration[]>([]);
-  const [message, setMessage] = useState('');
-  const { register, handleSubmit, reset } = useForm<WorkOpportunity>({
+  
+  const [oppMessage, setOppMessage] = useState('');
+  const [regMessage, setRegMessage] = useState('');
+  
+  const [editingOppId, setEditingOppId] = useState<string | null>(null);
+
+  const { register: registerOpp, handleSubmit: handleSubmitOpp, reset: resetOpp, setValue: setOppValue } = useForm<WorkOpportunity>({
     defaultValues: { type: '', status: 'Open' as const },
   });
+  
   const { register: registerVolunteer, handleSubmit: handleSubmitVolunteer, reset: resetVolunteer } = useForm<WorkRegistration>({
     defaultValues: { gender: '', ageGroup: '', availability: '', village: '' },
   });
@@ -22,11 +28,21 @@ function Work() {
   const loadWork = async () => {
     try {
       const [oppSnap, regSnap] = await Promise.all([
-        getDocs(collection(db, 'workOpportunities')),
-        getDocs(collection(db, 'workRegistrations')),
+        get(ref(db, 'workOpportunities')),
+        get(ref(db, 'workRegistrations')),
       ]);
-      setOpportunities(oppSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as WorkOpportunity) })));
-      setRegistrations(regSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as WorkRegistration) })));
+      if (oppSnap.exists()) {
+        const data = oppSnap.val();
+        setOpportunities(Object.entries(data).map(([id, val]) => ({ id, ...(val as any) })));
+      } else {
+        setOpportunities([]);
+      }
+      if (regSnap.exists()) {
+        const data = regSnap.val();
+        setRegistrations(Object.entries(data).map(([id, val]) => ({ id, ...(val as any) })));
+      } else {
+        setRegistrations([]);
+      }
     } catch (error) {
       console.error(error);
     }
@@ -37,34 +53,81 @@ function Work() {
   }, []);
 
   const onCreateOpportunity = async (data: WorkOpportunity) => {
-    setMessage('');
+    setOppMessage('');
+    
+    // Duplicate check
+    if (!editingOppId) {
+      const exists = opportunities.some(o => o.title.toLowerCase() === data.title.toLowerCase() && o.village.toLowerCase() === data.village.toLowerCase() && o.date === data.date);
+      if (exists) {
+        setOppMessage('This work opportunity already exists for this date and village.');
+        return;
+      }
+    }
+
     try {
-      await addDoc(collection(db, 'workOpportunities'), {
-        ...data,
-        createdAt: serverTimestamp(),
-      });
-      setMessage('Work opportunity created.');
-      reset({ type: '', status: 'Open', title: '', description: '', village: '', date: '', startTime: '', endTime: '', requiredParticipants: 0, coordinator: '' });
+      if (editingOppId) {
+        await update(ref(db, `workOpportunities/${editingOppId}`), data);
+        setOppMessage('Work opportunity updated.');
+      } else {
+        await push(ref(db, 'workOpportunities'), {
+          ...data,
+          createdAt: Date.now(),
+        });
+        setOppMessage('Work opportunity created.');
+      }
+      resetOpp({ type: '', status: 'Open', title: '', description: '', village: '', date: '', startTime: '', endTime: '', requiredParticipants: 0, coordinator: '' });
+      setEditingOppId(null);
       loadWork();
     } catch (error) {
-      setMessage('Unable to create opportunity.');
+      setOppMessage('Unable to save opportunity.');
+      console.error(error);
+    }
+  };
+
+  const handleEditOpp = (opp: WorkOpportunity) => {
+    setEditingOppId(opp.id || null);
+    setOppValue('title', opp.title);
+    setOppValue('type', opp.type);
+    setOppValue('description', opp.description);
+    setOppValue('village', opp.village);
+    setOppValue('date', opp.date);
+    setOppValue('startTime', opp.startTime);
+    setOppValue('endTime', opp.endTime);
+    setOppValue('requiredParticipants', opp.requiredParticipants);
+    setOppValue('coordinator', opp.coordinator);
+    setOppValue('status', opp.status);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteOpp = async (id?: string) => {
+    if (!id || !window.confirm('Are you sure you want to delete this opportunity?')) return;
+    try {
+      await remove(ref(db, `workOpportunities/${id}`));
+      loadWork();
+    } catch (error) {
       console.error(error);
     }
   };
 
   const onRegisterVolunteer = async (data: WorkRegistration) => {
-    setMessage('');
+    setRegMessage('');
+    
+    const exists = registrations.some(r => r.name === data.name && r.phone === data.phone && r.village === data.village);
+    if (exists) {
+      setRegMessage('You are already registered for a work opportunity.');
+      return;
+    }
+
     try {
-      await addDoc(collection(db, 'workRegistrations'), {
+      await push(ref(db, 'workRegistrations'), {
         ...data,
         registrationNumber: `WORK-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
-        createdAt: serverTimestamp(),
+        createdAt: Date.now(),
       });
-      setMessage('Registration saved.');
+      setRegMessage('Registration saved.');
       resetVolunteer({ gender: '', ageGroup: '', availability: '', name: '', phone: '', village: '' });
       loadWork();
       try {
-        // send to Postgres work registration endpoint
         await fetch('/api/work/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -87,7 +150,7 @@ function Work() {
         sendAudit({ action: 'work_registered', resource: data.village, details: { name: data.name, village: data.village } });
       } catch {}
     } catch (error) {
-      setMessage('Unable to save registration.');
+      setRegMessage('Unable to save registration.');
       console.error(error);
     }
   };
@@ -95,8 +158,17 @@ function Work() {
   const markAttendance = async (registration: WorkRegistration, attendance: 'Present' | 'Absent') => {
     if (!registration.id) return;
     try {
-      const ref = doc(db, 'workRegistrations', registration.id);
-      await updateDoc(ref, { attendance });
+      await update(ref(db, `workRegistrations/${registration.id}`), { attendance });
+      loadWork();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleDeleteReg = async (id?: string) => {
+    if (!id || !window.confirm('Are you sure you want to delete this registration?')) return;
+    try {
+      await remove(ref(db, `workRegistrations/${id}`));
       loadWork();
     } catch (error) {
       console.error(error);
@@ -111,55 +183,63 @@ function Work() {
       </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
         {profile?.role !== 'Community Member' ? (
-          <form className="space-y-4 rounded-3xl border border-earth/10 bg-sand p-5" onSubmit={handleSubmit(onCreateOpportunity)}>
-            <p className="text-sm uppercase tracking-[0.2em] text-earth/70">{t('workOpportunities')}</p>
+          <form className="space-y-4 rounded-3xl border border-earth/10 bg-sand p-5 h-fit" onSubmit={handleSubmitOpp(onCreateOpportunity)}>
+            <div className="flex justify-between items-center">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-earth/70">
+                {editingOppId ? 'Edit Opportunity' : t('workOpportunities')}
+              </p>
+              {editingOppId && (
+                <button type="button" onClick={() => { resetOpp(); setEditingOppId(null); }} className="text-xs text-red-500 hover:underline">Cancel Edit</button>
+              )}
+            </div>
             <label className="block text-sm text-forest">
               {t('activityTitle')}
-              <input {...register('title', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+              <input {...registerOpp('title', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
             </label>
             <label className="block text-sm text-forest">
               {t('activityType')}
-              <input {...register('type', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+              <input {...registerOpp('type', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
             </label>
             <label className="block text-sm text-forest">
               {t('description')}
-              <textarea {...register('description')} rows={3} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+              <textarea {...registerOpp('description')} rows={3} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
             </label>
             <label className="block text-sm text-forest">
               {t('village')}
-              <input {...register('village', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+              <input {...registerOpp('village', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm text-forest">
                 {t('date')}
-                <input type="date" {...register('date', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+                <input type="date" {...registerOpp('date', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
               </label>
               <label className="block text-sm text-forest">
                 {t('startTime')}
-                <input type="time" {...register('startTime', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+                <input type="time" {...registerOpp('startTime', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
               </label>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm text-forest">
                 {t('endTime')}
-                <input type="time" {...register('endTime', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+                <input type="time" {...registerOpp('endTime', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
               </label>
               <label className="block text-sm text-forest">
                 {t('numberOfRequiredParticipants')}
-                <input type="number" {...register('requiredParticipants', { required: true, min: 1 })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+                <input type="number" {...registerOpp('requiredParticipants', { required: true, min: 1 })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
               </label>
             </div>
             <label className="block text-sm text-forest">
               {t('coordinator')}
-              <input {...register('coordinator', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
+              <input {...registerOpp('coordinator', { required: true })} className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm" />
             </label>
             <button type="submit" className="w-full rounded-3xl bg-forest px-5 py-3 text-sm font-semibold text-white transition hover:bg-earth">
-              {t('submit')}
+              {editingOppId ? 'Update' : t('submit')}
             </button>
+            {oppMessage ? <p className="text-sm text-forest">{oppMessage}</p> : null}
           </form>
         ) : null}
 
-        <div className="rounded-3xl border border-earth/10 bg-white p-5 shadow-sm">
+        <div className="rounded-3xl border border-earth/10 bg-white p-5 shadow-sm h-fit">
           <p className="text-sm uppercase tracking-[0.2em] text-earth/70">{t('registerForWork')}</p>
           <form className="mt-4 space-y-4" onSubmit={handleSubmitVolunteer(onRegisterVolunteer)}>
             <label className="block text-sm text-forest">
@@ -192,7 +272,7 @@ function Work() {
               {t('submit')}
             </button>
           </form>
-          {message ? <p className="mt-3 text-sm text-forest">{message}</p> : null}
+          {regMessage ? <p className="mt-3 text-sm text-forest">{regMessage}</p> : null}
         </div>
       </div>
 
@@ -203,7 +283,15 @@ function Work() {
             {opportunities.length ? (
               opportunities.map((opp) => (
                 <div key={opp.id} className="rounded-3xl bg-white p-4 shadow-sm">
-                  <p className="font-semibold text-forest">{opp.title}</p>
+                  <div className="flex justify-between items-start">
+                    <p className="font-semibold text-forest">{opp.title}</p>
+                    {profile?.role !== 'Community Member' && (
+                      <div className="flex gap-2 text-xs">
+                        <button onClick={() => handleEditOpp(opp)} className="text-forest hover:underline">Edit</button>
+                        <button onClick={() => handleDeleteOpp(opp.id)} className="text-red-500 hover:underline">Del</button>
+                      </div>
+                    )}
+                  </div>
                   <p className="text-sm text-slate-600">{opp.type} • {opp.village}</p>
                   <p className="mt-2 text-sm text-slate-700">{opp.description}</p>
                   <p className="mt-2 text-xs uppercase tracking-[0.2em] text-earth/70">{opp.status}</p>
@@ -214,31 +302,39 @@ function Work() {
             )}
           </div>
         </div>
+        
         <div className="rounded-3xl border border-earth/10 bg-sand p-5 shadow-sm">
           <p className="text-sm uppercase tracking-[0.2em] text-earth/70">{t('registeredParticipants')}</p>
           <div className="mt-4 space-y-3">
             {registrations.length ? (
               registrations.map((reg) => (
                 <div key={reg.id} className="rounded-3xl bg-white p-4 shadow-sm">
-                  <p className="font-semibold text-forest">{reg.name}</p>
-                  <p className="text-sm text-slate-600">{reg.village} • {reg.registrationNumber}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => markAttendance(reg, 'Present')}
-                      className="rounded-full bg-forest px-3 py-1 text-xs font-semibold text-white"
-                    >
-                      {t('present')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => markAttendance(reg, 'Absent')}
-                      className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white"
-                    >
-                      {t('absent')}
-                    </button>
-                    {reg.attendance ? <span className="rounded-full bg-sand px-3 py-1 text-xs text-forest">{reg.attendance}</span> : null}
+                  <div className="flex justify-between items-start">
+                    <p className="font-semibold text-forest">{reg.name}</p>
+                    {profile?.role !== 'Community Member' && (
+                      <button onClick={() => handleDeleteReg(reg.id)} className="text-xs text-red-500 hover:underline">Del</button>
+                    )}
                   </div>
+                  <p className="text-sm text-slate-600">{reg.village} • {reg.registrationNumber}</p>
+                  {profile?.role !== 'Community Member' && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => markAttendance(reg, 'Present')}
+                        className="rounded-full bg-forest px-3 py-1 text-xs font-semibold text-white"
+                      >
+                        {t('present')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => markAttendance(reg, 'Absent')}
+                        className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white"
+                      >
+                        {t('absent')}
+                      </button>
+                    </div>
+                  )}
+                  {reg.attendance ? <p className="mt-2 inline-block rounded-full bg-sand px-3 py-1 text-xs text-forest">{reg.attendance}</p> : null}
                 </div>
               ))
             ) : (

@@ -1,128 +1,260 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { setStoredForestName, useForestName } from '../config';
+import { useTheme, ThemeMode } from '../contexts/ThemeContext';
+import { db } from '../firebase';
+import { ref, update } from 'firebase/database';
+import pkg from '../../package.json';
 
-type PasswordForm = {
-  password: string;
-  confirmPassword: string;
-};
-
-type BrandingForm = {
-  forestName: string;
-};
 
 function Settings() {
-  const { t } = useTranslation();
-  const { profile, changePassword } = useAuth();
-  const { register: registerPassword, handleSubmit: handlePasswordSubmit, watch } = useForm<PasswordForm>();
-  const { register: registerBranding, handleSubmit: handleBrandingSubmit } = useForm<BrandingForm>();
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [brandingMessage, setBrandingMessage] = useState('');
-  const [brandingError, setBrandingError] = useState('');
-  const forestName = useForestName();
+  const { t, i18n } = useTranslation();
+  const { profile, user } = useAuth();
+  const { mode, setMode, resolvedTheme } = useTheme();
 
-  const onSubmit = async (data: PasswordForm) => {
-    setMessage('');
-    setError('');
-    if (data.password !== data.confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileData, setProfileData] = useState({
+    name: profile?.name || '',
+    phone: profile?.phone || '',
+  });
+  const [profileMessage, setProfileMessage] = useState('');
+
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>(
+    localStorage.getItem('cfms-system-logo') || ''
+  );
+  const [logoMessage, setLogoMessage] = useState('');
+
+  /* ── Profile update (any logged-in user) ────── */
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
     try {
-      await changePassword(data.password);
-      setMessage('Password updated successfully.');
-    } catch (err) {
-      setError('Unable to update password. Please try again.');
-      console.error(err);
+      await update(ref(db, `users/${user.uid}`), {
+        name: profileData.name,
+        phone: profileData.phone,
+      });
+      setProfileMessage('Profile updated successfully.');
+      setEditingProfile(false);
+    } catch {
+      setProfileMessage('Failed to update profile.');
     }
   };
 
-  const onBrandingSubmit = (data: BrandingForm) => {
-    setBrandingError('');
-    setBrandingMessage('');
-    try {
-      setStoredForestName(data.forestName);
-      setBrandingMessage('Forest name updated successfully.');
-    } catch (err) {
-      setBrandingError('Unable to update forest name. Please try again.');
-      console.error(err);
-    }
+  /* ── Logo (Forestry Officer / VFC / National Director) ── */
+  const canUploadLogo =
+    profile?.role === 'National Director' ||
+    profile?.role === 'Forestry Officer' ||
+    profile?.role === 'Village Forest Committee';
+
+  const handleLogoUpload = () => {
+    if (!logoFile) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      localStorage.setItem('cfms-system-logo', base64);
+      setLogoPreview(base64);
+      setLogoMessage('Logo updated. Refresh to see it in the header.');
+      window.dispatchEvent(new Event('cfms-system-logo-changed'));
+    };
+    reader.readAsDataURL(logoFile);
   };
+
+  /* ── Language ────────────────────────────────── */
+  const switchLanguage = (lang: 'en' | 'ny') => {
+    i18n.changeLanguage(lang);
+    localStorage.setItem('cfms-language', lang);
+  };
+
+  /* ── Theme ───────────────────────────────────── */
+  const themeOptions: { value: ThemeMode; label: string; icon: string; desc: string }[] = [
+    { value: 'light',  label: t('themeLight'),  icon: '☀️', desc: 'Always bright' },
+    { value: 'dark',   label: t('themeDark'),   icon: '🌙', desc: 'Easy on the eyes' },
+    { value: 'system', label: t('themeSystem'), icon: '💻', desc: 'Follows your device' },
+  ];
 
   return (
-    <div className="space-y-6 rounded-[32px] border border-earth/10 bg-white/90 p-6 shadow-sm">
+    <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h2 className="text-2xl font-semibold text-forest">{t('settings')}</h2>
-        <p className="mt-2 text-sm text-slate-600">Manage your account and security.</p>
+        <p className="mt-1 text-sm text-slate-600">
+          Your profile, language and appearance preferences.
+        </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-earth/10 bg-sand p-5">
-            <p className="text-sm uppercase tracking-[0.2em] text-earth/70">{t('profile')}</p>
-            <p className="mt-4 text-base text-forest">{profile?.name}</p>
-            <p className="mt-1 text-sm text-slate-600">{profile?.email}</p>
-            <p className="mt-1 text-sm text-slate-600">{profile?.role}</p>
-          </div>
+      {/* ── Profile ──────────────────────────────── */}
+      <section className="rounded-[32px] border border-earth/10 bg-white/90 p-6 shadow-sm">
+        <h3 className="text-base font-semibold text-forest">{t('profile')}</h3>
 
-          <form className="rounded-3xl border border-earth/10 bg-white p-5 shadow-sm" onSubmit={handleBrandingSubmit(onBrandingSubmit)}>
-            <p className="text-sm uppercase tracking-[0.2em] text-earth/70">System Branding</p>
-            <label className="mt-4 block text-sm font-medium text-forest">
-              Forest Name
+        {!editingProfile ? (
+          <div className="mt-4 flex items-start justify-between">
+            <div className="space-y-1">
+              <p className="font-medium text-slate-900">{profile?.name}</p>
+              <p className="text-sm text-slate-500">{profile?.email}</p>
+              {profile?.phone && (
+                <p className="text-sm text-slate-500">{profile.phone}</p>
+              )}
+              <span className="mt-2 inline-block rounded-full bg-forest/10 px-3 py-1 text-xs font-semibold text-forest">
+                {profile?.role}
+              </span>
+            </div>
+            <button
+              onClick={() => setEditingProfile(true)}
+              className="rounded-full bg-sand px-4 py-2 text-sm font-medium text-forest transition hover:bg-earth/20"
+            >
+              Edit
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleProfileUpdate} className="mt-4 space-y-4">
+            <label className="block text-sm text-forest">
+              Name
               <input
                 type="text"
-                defaultValue={forestName}
-                {...registerBranding('forestName', { required: true })}
-                className="mt-2 w-full rounded-3xl border border-earth/20 bg-sand px-4 py-3 text-sm outline-none focus:border-forest"
+                value={profileData.name}
+                onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm"
+                required
               />
             </label>
-            {brandingError ? <p className="mt-3 text-sm text-red-600">{brandingError}</p> : null}
-            {brandingMessage ? <p className="mt-3 text-sm text-forest">{brandingMessage}</p> : null}
-            <button
-              type="submit"
-              className="mt-5 w-full rounded-3xl bg-forest px-5 py-3 text-sm font-semibold text-white transition hover:bg-earth"
-            >
-              Save
-            </button>
+            <label className="block text-sm text-forest">
+              Phone Number
+              <input
+                type="tel"
+                value={profileData.phone}
+                onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                className="mt-2 w-full rounded-3xl border border-earth/20 bg-white px-4 py-3 text-sm"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="rounded-3xl bg-forest px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-earth"
+              >
+                {t('saveChanges')}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEditingProfile(false); setProfileMessage(''); }}
+                className="rounded-3xl bg-sand px-5 py-2.5 text-sm font-semibold text-forest transition hover:bg-earth/20"
+              >
+                {t('cancel')}
+              </button>
+            </div>
           </form>
-        </div>
+        )}
+        {profileMessage && (
+          <p className="mt-3 text-sm text-forest">{profileMessage}</p>
+        )}
+      </section>
 
-        <form className="rounded-3xl border border-earth/10 bg-white p-5 shadow-sm" onSubmit={handlePasswordSubmit(onSubmit)}>
-          <p className="text-sm uppercase tracking-[0.2em] text-earth/70">{t('changePassword')}</p>
-          <label className="mt-4 block text-sm font-medium text-forest">
-            {t('newPassword')}
-            <input
-              type="password"
-              {...registerPassword('password', { required: true })}
-              className="mt-2 w-full rounded-3xl border border-earth/20 bg-sand px-4 py-3 text-sm outline-none focus:border-forest"
-            />
-          </label>
-          <label className="mt-4 block text-sm font-medium text-forest">
-            {t('confirmPassword')}
-            <input
-              type="password"
-              {...registerPassword('confirmPassword', { required: true })}
-              className="mt-2 w-full rounded-3xl border border-earth/20 bg-sand px-4 py-3 text-sm outline-none focus:border-forest"
-            />
-          </label>
-          {watch('password') && watch('confirmPassword') && watch('password') !== watch('confirmPassword') ? (
-            <p className="mt-2 text-sm text-red-600">Passwords do not match.</p>
-          ) : null}
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-          {message ? <p className="mt-3 text-sm text-forest">{message}</p> : null}
+      {/* ── Language ──────────────────────────────── */}
+      <section className="rounded-[32px] border border-earth/10 bg-white/90 p-6 shadow-sm">
+        <h3 className="text-base font-semibold text-forest">{t('languageManagement')}</h3>
+        <p className="mt-1 text-sm text-slate-600">
+          Switch between English and Chichewa (Chinyanja).
+        </p>
+        <div className="mt-4 flex gap-3">
           <button
-            type="submit"
-            className="mt-5 w-full rounded-3xl bg-forest px-5 py-3 text-sm font-semibold text-white transition hover:bg-earth"
+            type="button"
+            onClick={() => switchLanguage('en')}
+            className={`flex-1 rounded-3xl border py-3 text-sm font-medium transition ${
+              i18n.language === 'en'
+                ? 'border-forest bg-forest text-white shadow-md'
+                : 'border-earth/20 bg-white text-forest hover:border-forest'
+            }`}
           >
-            {t('changePassword')}
+            🇬🇧 English
           </button>
-        </form>
+          <button
+            type="button"
+            onClick={() => switchLanguage('ny')}
+            className={`flex-1 rounded-3xl border py-3 text-sm font-medium transition ${
+              i18n.language === 'ny'
+                ? 'border-forest bg-forest text-white shadow-md'
+                : 'border-earth/20 bg-white text-forest hover:border-forest'
+            }`}
+          >
+            🇲🇼 Chichewa
+          </button>
+        </div>
+      </section>
+
+      {/* ── Appearance / Theme ───────────────────── */}
+      <section className="rounded-[32px] border border-earth/10 bg-white/90 p-6 shadow-sm">
+        <h3 className="text-base font-semibold text-forest">{t('appearance')}</h3>
+        <p className="mt-1 text-sm text-slate-600">
+          Choose a colour scheme. "Follow Device" automatically matches your OS.
+        </p>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          {themeOptions.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setMode(opt.value)}
+              className={`flex flex-col items-center gap-2 rounded-3xl border p-4 text-sm font-medium transition ${
+                mode === opt.value
+                  ? 'border-forest bg-forest text-white shadow-md'
+                  : 'border-earth/20 bg-white text-forest hover:border-forest'
+              }`}
+            >
+              <span className="text-2xl">{opt.icon}</span>
+              <span>{opt.label}</span>
+              <span className={`text-xs font-normal ${mode === opt.value ? 'text-white/80' : 'text-slate-500'}`}>
+                {opt.desc}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 rounded-2xl bg-sand px-4 py-2 text-sm text-slate-600">
+          {resolvedTheme === 'dark' ? '🌙' : '☀️'}{' '}
+          Currently showing <strong>{resolvedTheme}</strong> theme
+          {mode === 'system' ? ' (following your device)' : ''}
+        </p>
+      </section>
+
+      {/* ── System Branding (Officers & VFC) ─────── */}
+      {canUploadLogo && (
+        <section className="rounded-[32px] border border-earth/10 bg-white/90 p-6 shadow-sm">
+          <h3 className="text-base font-semibold text-forest">{t('systemBranding')}</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Upload a community logo shown in the navigation header.
+          </p>
+          <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
+            {logoPreview && (
+              <img
+                src={logoPreview}
+                alt="Current logo"
+                className="h-14 w-14 rounded-2xl object-cover shadow-sm"
+              />
+            )}
+            <div className="flex flex-col gap-2">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                className="text-sm file:mr-4 file:rounded-full file:border-0 file:bg-forest file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-earth"
+              />
+              <button
+                onClick={handleLogoUpload}
+                disabled={!logoFile}
+                className="w-fit rounded-3xl bg-forest px-5 py-2 text-sm font-semibold text-white transition hover:bg-earth disabled:opacity-40"
+              >
+                Update Logo
+              </button>
+            </div>
+          </div>
+          {logoMessage && <p className="mt-3 text-sm text-forest">{logoMessage}</p>}
+        </section>
+      )}
+
+      {/* ── System Version ─────────────── */}
+      <div className="pt-4 text-center text-sm text-slate-400">
+        Forest CFMS v{pkg.version}
       </div>
     </div>
   );
 }
+
 
 export default Settings;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { ref, get } from 'firebase/database';
 import { useTranslation } from 'react-i18next';
 import jsPDF from 'jspdf';
 import { db } from '../firebase';
@@ -13,14 +13,14 @@ function Reports() {
     const loadReports = async () => {
       try {
         const [plantingSnap, incidentSnap, permitSnap] = await Promise.all([
-          getDocs(collection(db, 'treePlanting')),
-          getDocs(collection(db, 'incidents')),
-          getDocs(collection(db, 'permits')),
+          get(ref(db, 'treePlanting')),
+          get(ref(db, 'incidents')),
+          get(ref(db, 'permits')),
         ]);
         setItems([
-          { title: t('treePlanting'), count: plantingSnap.size },
-          { title: t('incidents'), count: incidentSnap.size },
-          { title: t('permits'), count: permitSnap.size },
+          { title: t('treePlanting'), count: plantingSnap.exists() ? Object.keys(plantingSnap.val()).length : 0 },
+          { title: t('incidents'), count: incidentSnap.exists() ? Object.keys(incidentSnap.val()).length : 0 },
+          { title: t('permits'), count: permitSnap.exists() ? Object.keys(permitSnap.val()).length : 0 },
         ]);
       } catch (error) {
         console.error(error);

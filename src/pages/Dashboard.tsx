@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, getDocs, orderBy, query, limit, Timestamp } from 'firebase/firestore';
+import { ref, get } from 'firebase/database';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -10,14 +10,18 @@ const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
 
 function buildSeries(docs: any[], dateField: string) {
   const series = months.map((name) => ({ name, value: 0 }));
-  docs.forEach((doc) => {
-    const data = doc.data();
-    const timestamp = data[dateField] as Timestamp;
-    const date = timestamp?.toDate?.();
-    if (date) {
+  docs.forEach((data) => {
+    let date: Date | null = null;
+    const val = data[dateField] || data.createdAt;
+    if (typeof val === 'number') {
+      date = new Date(val);
+    } else if (typeof val === 'string') {
+      date = new Date(val);
+    }
+    if (date && !isNaN(date.getTime())) {
       const month = date.getMonth();
       const index = month < series.length ? month : 0;
-      series[index].value += data.count || 1;
+      series[index].value += data.count ? Number(data.count) : 1;
     }
   });
   return series;
@@ -35,29 +39,40 @@ function Dashboard() {
     const loadData = async () => {
       try {
         const [forestSnap, plantingSnap, incidentSnap, permitSnap, villageSnap] = await Promise.all([
-          getDocs(collection(db, 'forests')),
-          getDocs(collection(db, 'treePlanting')),
-          getDocs(collection(db, 'incidents')),
-          getDocs(collection(db, 'permits')),
-          getDocs(collection(db, 'villages')),
+          get(ref(db, 'forests')),
+          get(ref(db, 'treePlanting')),
+          get(ref(db, 'incidents')),
+          get(ref(db, 'permits')),
+          get(ref(db, 'villages')),
         ]);
 
+        const getArr = (snap: any) => snap.exists() ? Object.values(snap.val()) : [];
+        const fArr = getArr(forestSnap);
+        const pArr = getArr(plantingSnap);
+        const iArr = getArr(incidentSnap);
+        const perArr = getArr(permitSnap);
+        const vArr = getArr(villageSnap);
+
         const counts = {
-          forests: forestSnap.size,
-          trees: plantingSnap.docs.reduce((sum, doc) => sum + (doc.data().count || 0), 0),
-          permits: permitSnap.docs.filter((doc) => doc.data().status === 'Approved').length,
-          incidents: incidentSnap.size,
-          villages: villageSnap.size,
+          forests: fArr.length,
+          trees: pArr.reduce((sum: number, item: any) => sum + (Number(item.count) || 0), 0),
+          permits: perArr.filter((item: any) => item.status === 'Approved').length,
+          incidents: iArr.length,
+          villages: vArr.length,
         };
 
         setStats(counts);
-        setPlantingSeries(buildSeries(plantingSnap.docs, 'plantingDate'));
-        setIncidentSeries(buildSeries(incidentSnap.docs, 'incidentDate'));
+        setPlantingSeries(buildSeries(pArr, 'plantingDate'));
+        setIncidentSeries(buildSeries(iArr, 'incidentDate'));
+
+        const sortedIncidents = [...iArr].sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+        const sortedPlantings = [...pArr].sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+        const sortedPermits = [...perArr].sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
 
         const activities = [
-          ...incidentSnap.docs.slice(0, 2).map((doc) => `⚠️ ${doc.data().type} - ${doc.data().village}`),
-          ...plantingSnap.docs.slice(0, 2).map((doc) => `🌱 ${doc.data().species} - ${doc.data().village}`),
-          ...permitSnap.docs.slice(0, 2).map((doc) => `📝 ${doc.data().requestType} - ${doc.data().status}`),
+          ...sortedIncidents.slice(0, 2).map((item: any) => `⚠️ ${item.type} - ${item.village}`),
+          ...sortedPlantings.slice(0, 2).map((item: any) => `🌱 ${item.species} - ${item.village}`),
+          ...sortedPermits.slice(0, 2).map((item: any) => `📝 ${item.requestType} - ${item.status}`),
         ];
         setRecent(activities);
       } catch (error) {

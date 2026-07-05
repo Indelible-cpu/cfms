@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Function to get the current user's role
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check specific roles
+    function isNationalDirector() {
+      return getRole() == 'National Director';
+    }
+    function isForestryOfficer() {
+      return getRole() == 'Forestry Officer';
+    }
+    function isVFC() {
+      return getRole() == 'Village Forest Committee';
+    }
+    
+    // Admin equivalent roles
+    function isAuthorizedManager() {
+      return isNationalDirector() || isForestryOfficer() || isVFC();
+    }
+    
+    // ── Users Collection ──
+    match /users/{userId} {
+      // Anyone authenticated can read user profiles (needed for displaying names in UI)
+      allow read: if isAuthenticated();
+      // Users can only create/update their own profile
+      allow create, update: if isAuthenticated() && request.auth.uid == userId;
+      // Nobody can delete users from client-side
+      allow delete: if false;
+    }
+
+    // ── Core Collections (Forests, Villages, Permits, Planting, Announcements) ──
+    match /{collection}/{document} {
+      // Allow read for any authenticated user
+      allow read: if isAuthenticated();
+      
+      // Allow create/update/delete only for authorized managers
+      allow create, update, delete: if isAuthenticated() && 
+        collection in ['forests', 'villages', 'permits', 'planting', 'announcements'] && 
+        isAuthorizedManager();
+    }
+
+    // ── Work Opportunities Collection ──
+    match /workOpportunities/{oppId} {
+      allow read: if isAuthenticated();
+      // Only authorized managers can manage opportunities
+      allow create, update, delete: if isAuthenticated() && isAuthorizedManager();
+    }
+
+    // ── Incidents Collection ──
+    match /incidents/{incidentId} {
+      allow read: if isAuthenticated();
+      // ANY authenticated user can report an incident
+      allow create: if isAuthenticated();
+      // Only authorized managers can update (change status) or delete incidents
+      allow update, delete: if isAuthenticated() && isAuthorizedManager();
+    }
+    
+    // ── Work Registrations Collection (Volunteers) ──
+    match /workRegistrations/{regId} {
+      allow read: if isAuthenticated();
+      // ANY authenticated user can register for work
+      allow create: if isAuthenticated();
+      // Only managers can update (mark attendance) or delete registrations
+      allow update, delete: if isAuthenticated() && isAuthorizedManager();
+    }
+  }
+}

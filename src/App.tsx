@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
+import Announcements from './pages/Announcements';
 import Forests from './pages/Forests';
 import Planting from './pages/Planting';
 import Incidents from './pages/Incidents';
@@ -36,6 +37,7 @@ function AppRoutes() {
         }
       >
         <Route path="dashboard" element={<Dashboard />} />
+        <Route path="announcements" element={<Announcements />} />
         <Route path="forests" element={<Forests />} />
         <Route path="planting" element={<Planting />} />
         <Route path="incidents" element={<Incidents />} />

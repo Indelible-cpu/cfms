@@ -1,9 +1,26 @@
 {
-  "name": "Community Forest Management System",
-  "short_name": "CFMS",
-  "start_url": ".",
+  "name": "Forest – Community Forest Management",
+  "short_name": "Forest",
+  "description": "A bilingual community forest management system for Malawi villages.",
+  "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#f3e9d2",
   "theme_color": "#2f6b35",
-  "description": "A simple bilingual forest management system for Malawi communities."
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "en"
 }
