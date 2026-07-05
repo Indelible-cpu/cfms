@@ -1,20 +1,17 @@
-export type AuditPayload = {
-  actor?: string;
-  action: string;
-  resource?: string;
-  details?: Record<string, any> | string;
-  ts?: string;
-};
+import { auth, db } from '../firebase';
+import { ref, push } from 'firebase/database';
 
-export async function sendAudit(payload: AuditPayload) {
+export async function sendAudit(payload: { action: string; resource?: string; details?: any }) {
   try {
-    await fetch('/api/audit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const user = auth.currentUser;
+    await push(ref(db, 'audit_logs'), {
+      actor: user ? user.uid : 'anonymous',
+      action: payload.action,
+      resource: payload.resource || null,
+      details: payload.details || null,
+      createdAt: Date.now(),
     });
-  } catch (err) {
-    // fail silently in UI - audit is best-effort
-    console.warn('Audit send failed', err);
+  } catch (error) {
+    console.error('Audit log failed', error);
   }
 }

@@ -127,24 +127,7 @@ function Work() {
       setRegMessage('Registration saved.');
       resetVolunteer({ gender: '', ageGroup: '', availability: '', name: '', phone: '', village: '' });
       loadWork();
-      try {
-        await fetch('/api/work/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            opportunityId: data.opportunityId || null,
-            name: data.name,
-            phone: data.phone,
-            village: data.village,
-            gender: data.gender,
-            ageGroup: data.ageGroup,
-            availability: data.availability,
-            registrationNumber: `WORK-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
-          }),
-        });
-      } catch (err) {
-        console.warn('Work registration replicate failed', err);
-      }
+      
       try {
         const { sendAudit } = await import('../lib/audit');
         sendAudit({ action: 'work_registered', resource: data.village, details: { name: data.name, village: data.village } });

@@ -37,6 +37,12 @@
       "$regId": {
         ".write": "auth != null && (!data.exists() || root.child('users').child(auth.uid).child('role').val() === 'National Director' || root.child('users').child(auth.uid).child('role').val() === 'Forestry Officer' || root.child('users').child(auth.uid).child('role').val() === 'Village Forest Committee')"
       }
+    },
+    
+    "audit_logs": {
+      "$logId": {
+        ".write": "auth != null && !data.exists()"
+      }
     }
   }
 }
