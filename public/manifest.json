@@ -1,0 +1,9 @@
+{
+  "name": "Community Forest Management System",
+  "short_name": "CFMS",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f3e9d2",
+  "theme_color": "#2f6b35",
+  "description": "A simple bilingual forest management system for Malawi communities."
+}
