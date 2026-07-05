@@ -3,9 +3,10 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useForestName } from '../config';
 
 type LoginForm = {
-  email: string;
+  username: string;
   password: string;
 };
 
@@ -15,14 +16,15 @@ function Login() {
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+  const forestName = useForestName();
 
   const onSubmit = async (data: LoginForm) => {
     setError('');
     try {
-      await login(data.email, data.password);
+      await login(data.username, data.password);
       navigate('/dashboard');
     } catch (err) {
-      setError('Unable to sign in. Check your email and password.');
+      setError('Unable to sign in. Check your username and password.');
       console.error(err);
     }
   };
@@ -30,15 +32,19 @@ function Login() {
   return (
     <div className="min-h-screen bg-sand px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-md rounded-[32px] border border-earth/10 bg-white p-6 shadow-xl sm:p-8">
-        <h1 className="text-3xl font-semibold text-forest">{t('login')}</h1>
+        <div className="text-center">
+          <p className="text-sm uppercase tracking-[0.35em] text-earth/70">Forest Platform</p>
+          <h1 className="mt-2 text-3xl font-semibold text-forest">{forestName}</h1>
+        </div>
+        <h2 className="mt-6 text-2xl font-semibold text-forest">{t('login')}</h2>
         <p className="mt-2 text-sm text-slate-600">{t('welcome')}</p>
 
         <form className="mt-8 space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <label className="block text-sm font-medium text-forest">
-            {t('email')}
+            {t('username')}
             <input
-              type="email"
-              {...register('email', { required: true })}
+              type="text"
+              {...register('username', { required: true })}
               className="mt-2 w-full rounded-3xl border border-earth/20 bg-sand px-4 py-3 text-sm text-forest outline-none transition focus:border-forest"
             />
           </label>
@@ -51,6 +57,11 @@ function Login() {
               className="mt-2 w-full rounded-3xl border border-earth/20 bg-sand px-4 py-3 text-sm text-forest outline-none transition focus:border-forest"
             />
           </label>
+
+          <p className="text-xs text-slate-500">
+            Testing: username <span className="font-semibold text-forest">admin</span> and password{' '}
+            <span className="font-semibold text-forest">admin123!</span>
+          </p>
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

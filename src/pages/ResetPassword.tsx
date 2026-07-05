@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 
 type ResetForm = {
-  email: string;
+  username: string;
 };
 
 function ResetPassword() {
@@ -19,8 +19,8 @@ function ResetPassword() {
     setMessage('');
     setError('');
     try {
-      await resetPassword(data.email);
-      setMessage('A password reset link was sent to your email.');
+      await resetPassword(data.username);
+      setMessage('A password reset link was sent if that username exists.');
     } catch (err) {
       setError('Unable to send reset email. Please try again.');
       console.error(err);
@@ -31,14 +31,14 @@ function ResetPassword() {
     <div className="min-h-screen bg-sand px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-md rounded-[32px] border border-earth/10 bg-white p-6 shadow-xl sm:p-8">
         <h1 className="text-3xl font-semibold text-forest">{t('resetPassword')}</h1>
-        <p className="mt-2 text-sm text-slate-600">Enter your email to get a reset link.</p>
+        <p className="mt-2 text-sm text-slate-600">Enter your username to get a reset link.</p>
 
         <form className="mt-8 space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <label className="block text-sm font-medium text-forest">
-            {t('email')}
+            {t('username')}
             <input
-              type="email"
-              {...register('email', { required: true })}
+              type="text"
+              {...register('username', { required: true })}
               className="mt-2 w-full rounded-3xl border border-earth/20 bg-sand px-4 py-3 text-sm text-forest outline-none transition focus:border-forest"
             />
           </label>

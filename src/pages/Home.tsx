@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useForestName } from '../config';
 
 function Home() {
   const { t } = useTranslation();
+  const forestName = useForestName();
 
   return (
     <div className="min-h-screen bg-sand px-4 py-8 sm:px-6">
       <div className="mx-auto flex max-w-5xl flex-col gap-8 rounded-[32px] border border-earth/15 bg-white/95 p-6 shadow-xl sm:p-10">
         <section className="space-y-4 text-center">
-          <p className="text-sm uppercase tracking-[0.35em] text-earth/70">{t('appName')}</p>
+          <p className="text-sm uppercase tracking-[0.35em] text-earth/70">{forestName}</p>
           <h1 className="text-4xl font-semibold text-forest sm:text-5xl">{t('welcome')}</h1>
           <p className="mx-auto max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
             {t('homeSubtitle')}

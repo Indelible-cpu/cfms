@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useForestName } from '../config';
 
 const navItems = [
   { to: '/dashboard', icon: '📊', key: 'dashboard' },
@@ -19,6 +20,7 @@ function Layout() {
   const { t, i18n } = useTranslation();
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
+  const forestName = useForestName();
 
   const handleLogout = async () => {
     await logout();
@@ -34,7 +36,7 @@ function Layout() {
       <header className="sticky top-0 z-30 border-b border-sand bg-white/95 px-4 py-4 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-earth">{t('appName')}</p>
+            <p className="text-sm uppercase tracking-[0.3em] text-earth">{forestName}</p>
             <p className="mt-1 text-2xl font-semibold">{t('welcomeDashboard')}</p>
             <p className="text-sm text-slate-600">{profile?.name || t('communityWork')}</p>
           </div>
