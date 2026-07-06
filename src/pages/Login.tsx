@@ -39,8 +39,17 @@ function Login() {
     try {
       await login(data.username, data.password);
       navigate('/dashboard');
-    } catch (err) {
-      setError('Unable to sign in. Check your username and password.');
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'auth/configuration-not-found') {
+        setError('Firebase Authentication is not enabled. Please enable Email/Password sign-in in Firebase Console.');
+      } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        setError('Wrong username or password. Please try again.');
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many failed attempts. Please wait a few minutes and try again.');
+      } else {
+        setError(`Sign-in failed: ${code || err?.message || 'Unknown error'}`);
+      }
       console.error(err);
     }
   };
