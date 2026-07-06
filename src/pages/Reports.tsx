@@ -6,7 +6,6 @@ import { db } from '../firebase';
 
 function Reports() {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<any[]>([]);
 
   useEffect(() => {

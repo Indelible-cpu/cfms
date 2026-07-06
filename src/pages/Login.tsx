@@ -12,7 +12,7 @@ type LoginForm = {
 
 function Login() {
   const { t } = useTranslation();
-  const { register, handleSubmit, formState } = useForm<LoginForm>();
+  const { register, handleSubmit } = useForm<LoginForm>();
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();

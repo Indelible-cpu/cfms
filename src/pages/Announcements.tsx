@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ref, push, get, remove } from 'firebase/database';
-import { useTranslation } from 'react-i18next';
 import { db } from '../firebase';
 import { AnnouncementRecord } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { uploadFile } from '../lib/storage';
 
 function Announcements() {
-  const { t } = useTranslation();
   const { profile } = useAuth();
   const { register, handleSubmit, reset } = useForm<AnnouncementRecord>({
     defaultValues: { type: 'General' },

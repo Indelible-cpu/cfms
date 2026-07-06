@@ -1,4 +1,4 @@
-import React from 'react';
+import './TreeLoader.css';
 
 export default function TreeLoader() {
   return (
