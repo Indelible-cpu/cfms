@@ -146,7 +146,7 @@ function Announcements() {
                       </button>
                     )}
                   </div>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-700">{item.content}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{item.content}</p>
                   <p className="mt-4 text-xs font-semibold text-slate-500">Posted by {item.author}</p>
                 </div>
               </div>

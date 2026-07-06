@@ -144,7 +144,7 @@ function Incidents() {
                       )}
                     </div>
                     <p className="text-sm text-slate-600">{incident.village} • {incident.incidentDate}</p>
-                    <p className="mt-2 text-sm text-slate-700">{incident.description}</p>
+                    <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap">{incident.description}</p>
                     
                     <div className="mt-3 flex items-center justify-between">
                       <span className="rounded-full bg-forest/10 px-3 py-1 text-xs font-semibold text-forest">{incident.status}</span>
