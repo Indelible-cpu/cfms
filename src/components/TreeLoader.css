@@ -1,0 +1,15 @@
+/* Tree Loader Animation */
+@keyframes growTree {
+  0%   { transform: scaleY(0.3); opacity: 0.4; }
+  50%  { transform: scaleY(1);   opacity: 1;   }
+  100% { transform: scaleY(0.3); opacity: 0.4; }
+}
+
+.tree-loader {
+  transform-origin: bottom;
+  animation: growTree 1.4s ease-in-out infinite;
+}
+
+.tree-small  { animation-delay: 0s;    }
+.tree-medium { animation-delay: 0.2s;  }
+.tree-large  { animation-delay: 0.4s;  }
