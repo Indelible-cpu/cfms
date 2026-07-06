@@ -284,7 +284,7 @@ function Settings() {
 
       {/* ── System Version ─────────────── */}
       <div className="pt-4 text-center text-sm text-slate-400">
-        Forest CFMS v{pkg.version}
+        Forest CFMS
       </div>
     </div>
   );
