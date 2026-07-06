@@ -1,9 +1,9 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { useForestName } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useSystemSettings } from '../hooks/useSystemSettings';
 
 const navItems = [
   { to: '/dashboard', icon: '📊', key: 'dashboard' },
@@ -23,16 +23,9 @@ function Layout() {
   const { t, i18n } = useTranslation();
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
-  const forestName = useForestName();
+  const { forestName, logo } = useSystemSettings();
   const { resolvedTheme, mode, setMode } = useTheme();
-  const [logo, setLogo] = useState(localStorage.getItem('cfms-system-logo') || '');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const handleLogoChange = () => setLogo(localStorage.getItem('cfms-system-logo') || '');
-    window.addEventListener('cfms-system-logo-changed', handleLogoChange);
-    return () => window.removeEventListener('cfms-system-logo-changed', handleLogoChange);
-  }, []);
 
   const handleLogout = async () => {
     await logout();

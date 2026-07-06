@@ -43,6 +43,11 @@
       "$logId": {
         ".write": "auth != null && !data.exists()"
       }
+    },
+    
+    "settings": {
+      ".read": true,
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'National Director' || root.child('users').child(auth.uid).child('role').val() === 'Forestry Officer' || root.child('users').child(auth.uid).child('role').val() === 'Village Forest Committee')"
     }
   }
 }

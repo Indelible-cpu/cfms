@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { useForestName } from '../config';
+import { useSystemSettings } from '../hooks/useSystemSettings';
 
 type LoginForm = {
   username: string;
@@ -32,7 +32,7 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
-  const forestName = useForestName();
+  const { forestName } = useSystemSettings();
 
   const onSubmit = async (data: LoginForm) => {
     setError('');
